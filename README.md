@@ -3,7 +3,6 @@
 A Retrieval-Augmented Generation (RAG) backend built with FastAPI, Gemini, and Qdrant.
 
 ## Features
-- Document ingestion
 - Text chunking with overlap
 - Gemini embeddings
 - Vector similarity search
@@ -18,7 +17,7 @@ A Retrieval-Augmented Generation (RAG) backend built with FastAPI, Gemini, and Q
 - SQLAlchemy
 
 ## Architecture Flow
-Document
+Text Input
 → Chunk
 → Embed
 → Store in Qdrant
