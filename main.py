@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from database import Base, engine, get_db
 from chunker import chunk_text
 from embeddings import embed_text, embed_chunks
-from qdrant_service import store_chunks, search_chunks
+from qdrant_service import store_chunks, search_chunks, delete_chunks
 from llm_service import generate_answer
 
 Base.metadata.create_all(bind=engine)
@@ -58,13 +58,16 @@ def create_doc(doc : DocumentCreate, db: Annotated[Session, Depends(get_db)]):
 
 @app.delete("/documents/{doc_id}", status_code = status.HTTP_200_OK)
 def delete_doc(doc_id: int, db: Annotated[Session, Depends(get_db)]):
+
     res = db.execute(select(models.Document).where(models.Document.id == doc_id))
     doc = res.scalars().first()
     if doc:
+        delete_chunks(doc_id)
         db.delete(doc)
         db.commit()
         return {"message" : "Document deleted"}
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
 
 @app.put("/documents/{doc_id}", response_model=DocumentResponse)
 def update_doc(doc: DocumentCreate, doc_id : int, db: Annotated[Session, Depends(get_db)]):
@@ -73,6 +76,14 @@ def update_doc(doc: DocumentCreate, doc_id : int, db: Annotated[Session, Depends
     if existing_doc:
         existing_doc.title = doc.title
         existing_doc.raw_text = doc.raw_text
+        try:
+            delete_chunks(doc_id)
+            chunks = chunk_text(doc.raw_text)
+            embeddings = embed_chunks(chunks)
+            store_chunks(existing_doc.id, chunks, embeddings)
+        except Exception:
+            db.rollback()
+            raise
         db.commit()
         db.refresh(existing_doc)
         return existing_doc

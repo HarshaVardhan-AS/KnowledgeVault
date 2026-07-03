@@ -1,4 +1,4 @@
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient, models
 import os
 from dotenv import load_dotenv
 import uuid
@@ -46,3 +46,17 @@ def search_chunks(query_embedding: list[float]):
         chunks.append(chunk)
     return chunks
 
+def delete_chunks(doc_id : int): #from DOCS
+    client.delete(
+        collection_name="knowledgevault",
+        points_selector=models.FilterSelector(
+            filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="document_id",
+                        match=models.MatchValue(value=doc_id),
+                    ),
+                ],
+            )
+        ),
+    )
