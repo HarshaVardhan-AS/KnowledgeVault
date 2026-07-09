@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File
 from schemas import DocumentCreate, DocumentResponse, QueryResponse, QueryRequest
 import models
 from typing import Annotated
@@ -9,6 +9,7 @@ from chunker import chunk_text
 from embeddings import embed_text, embed_chunks
 from qdrant_service import store_chunks, search_chunks, delete_chunks
 from llm_service import generate_answer
+from doc_parser import extract_text
 
 Base.metadata.create_all(bind=engine)
 app = FastAPI()
@@ -16,7 +17,7 @@ app = FastAPI()
 
 @app.get("/")
 def root():
-    return {"message": "Hello World"}
+    return {"message": "We ball"}
 
 
 @app.get("/documents", response_model=list[DocumentResponse])
@@ -99,4 +100,25 @@ def query_docs(request: QueryRequest ):
         "chunks" : chunks,
         "answer" : answer
     }
+
+@app.post("/documents/upload", response_model = DocumentResponse)
+def upload_document(file : UploadFile, db: Annotated[Session, Depends(get_db)]):
+    raw_text = extract_text(file)
+    new_doc = models.Document(
+        title=file.filename,
+        raw_text=raw_text,
+        source_type="File"
+    )
+    db.add(new_doc)
+    db.commit()
+    db.refresh(new_doc)
+    try:
+        chunks = chunk_text(new_doc.raw_text)
+        embeddings = embed_chunks(chunks)
+        store_chunks(new_doc.id, chunks, embeddings)
+    except Exception:
+        db.delete(new_doc)
+        db.commit()
+        raise
+    return new_doc
 
