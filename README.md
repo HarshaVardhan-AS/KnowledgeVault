@@ -72,7 +72,7 @@ Login
 ## Getting Started
 
 ```bash
-git clone ...
+git clone https://github.com/HarshaVardhan-AS/KnowledgeVault.git
 cd KnowledgeVault
 
 python -m venv .venv
