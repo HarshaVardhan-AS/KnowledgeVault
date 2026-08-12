@@ -23,3 +23,9 @@ class QueryResponse(BaseModel):
     query : str
     chunks : list[str]
     answer : str
+
+class Register(BaseModel):
+    username : str
+    password : str
+    email : str
+
