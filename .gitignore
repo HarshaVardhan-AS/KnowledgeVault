@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 .idea/
 *.db
+Dockerfile
+.dockerignore
+test.png
+test_img.png

@@ -1,18 +1,23 @@
 from fastapi import FastAPI, HTTPException, status, Depends, UploadFile, File
-from schemas import DocumentCreate, DocumentResponse, QueryResponse, QueryRequest
+from schemas import DocumentCreate, DocumentResponse, QueryResponse, QueryRequest, UploadResponse
 import models
 from typing import Annotated
 from sqlalchemy import select, and_, or_
 from sqlalchemy.orm import Session
 from database import Base, engine, get_db
 from chunker import chunk_text
-from embeddings import embed_text, embed_chunks
+from embeddings import embed_text, embed_chunks, sparse_embed_text
 from qdrant_service import store_chunks, search_chunks, delete_chunks
 from llm_service import generate_answer
 from doc_parser import extract_text
 from routers.auth import router
 from routers.auth import get_current_user
 Base.metadata.create_all(bind=engine)
+import os
+import json
+from redis_client import redis_client
+from worker import process_document
+from fastapi.responses import StreamingResponse
 app = FastAPI()
 app.include_router(router)
 
@@ -50,7 +55,8 @@ def create_doc(doc : DocumentCreate, db: Annotated[Session, Depends(get_db)], cu
     try:
         chunks = chunk_text(new_doc.raw_text)
         embeddings = embed_chunks(chunks)
-        store_chunks(new_doc.id, current_user.id, chunks, embeddings)
+        sparse_embeddings = sparse_embed_text(chunks)
+        store_chunks(new_doc.id, current_user.id, chunks, embeddings, sparse_embeddings)
     except Exception:
         db.delete(new_doc)
         db.commit()
@@ -84,7 +90,8 @@ def update_doc(doc: DocumentCreate, doc_id : int, db: Annotated[Session, Depends
             delete_chunks(doc_id, current_user.id)
             chunks = chunk_text(doc.raw_text)
             embeddings = embed_chunks(chunks)
-            store_chunks(existing_doc.id, current_user.id, chunks, embeddings)
+            sparse_embeddings = sparse_embed_text(chunks)
+            store_chunks(existing_doc.id, current_user.id, chunks, embeddings, sparse_embeddings)
         except Exception:
             db.rollback()
             raise
@@ -93,36 +100,38 @@ def update_doc(doc: DocumentCreate, doc_id : int, db: Annotated[Session, Depends
         return existing_doc
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
-@app.post("/query", response_model=QueryResponse)
+@app.post("/query")
 def query_docs(request: QueryRequest , current_user: Annotated[models.User, Depends(get_current_user)] ):
     query_embedding = embed_text(request.query)
-    chunks = search_chunks(query_embedding, current_user.id)
-    answer = generate_answer(request.query, chunks)
-    return {
-        "query" : request.query,
-        "chunks" : chunks,
-        "answer" : answer
-    }
-
-@app.post("/documents/upload", response_model = DocumentResponse)
+    sparse_query = sparse_embed_text([request.query])[0]
+    chunks = search_chunks(query_embedding, request.query, current_user.id, sparse_query)
+    return StreamingResponse(
+        generate_answer(request.query, chunks),
+        media_type="text/plain"
+    )
+@app.post("/documents/upload", response_model = UploadResponse, status_code=status.HTTP_202_ACCEPTED)
 def upload_document(file : UploadFile, db: Annotated[Session, Depends(get_db)], current_user: Annotated[models.User, Depends(get_current_user)]):
-    raw_text = extract_text(file)
     new_doc = models.Document(
         title=file.filename,
-        raw_text=raw_text,
+        raw_text="",
         source_type="File",
         user_id=current_user.id
     )
     db.add(new_doc)
     db.commit()
     db.refresh(new_doc)
-    try:
-        chunks = chunk_text(new_doc.raw_text)
-        embeddings = embed_chunks(chunks)
-        store_chunks(new_doc.id,current_user.id, chunks, embeddings)
-    except Exception:
-        db.delete(new_doc)
-        db.commit()
-        raise
-    return new_doc
+    file_path = f"uploads/{new_doc.id}_{file.filename}"
+    file.file.seek(0)
+    with open(file_path, "wb") as buffer:
+        buffer.write(file.file.read())
+    process_document.delay(
+        new_doc.id,
+        current_user.id,
+        file_path
+    )
+    return UploadResponse(
+            id=new_doc.id,
+            title=new_doc.title
+        )
+
 

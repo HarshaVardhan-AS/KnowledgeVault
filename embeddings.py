@@ -1,8 +1,13 @@
 from google import genai
 import os
+from fastembed import SparseTextEmbedding
 from dotenv import load_dotenv
 load_dotenv()
 client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+sparse_model = SparseTextEmbedding(model_name="Qdrant/bm25")
+
+def sparse_embed_text(texts: list[str]):
+    return list(sparse_model.embed(texts))
 
 def embed_text(text: str):
     response = client.models.embed_content(
@@ -18,4 +23,3 @@ def embed_chunks(chunks: list[str]):
         embedding = embed_text(chunk)
         embeddings.append(embedding)
     return embeddings
-

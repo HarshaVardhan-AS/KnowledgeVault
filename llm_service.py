@@ -20,9 +20,10 @@ def generate_answer(query: str, chunks: list[str]):
 
     If the answer is not in the context, say that the information is not available.
     """
-    response = client.models.generate_content(
+    response = client.models.generate_content_stream(
         model="gemini-3.1-flash-lite",
         contents=prompt
     )
-    return response.text
+    for chunk in response:
+        yield chunk.text
 

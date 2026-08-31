@@ -29,3 +29,8 @@ class Register(BaseModel):
     password : str
     email : str
 
+class UploadResponse(BaseModel):
+    id : int
+    title : str
+    status : str = "Processing"
+    message : str = "Document is being processed."
