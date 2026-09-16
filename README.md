@@ -13,7 +13,7 @@ A multi-user hybrid Retrieval-Augmented Generation (RAG) backend for document in
 * Asynchronous document ingestion using Celery
 * Upstash Redis-backed task queue
 * Two-stage document extraction with native parsing and EasyOCR fallback
-* Text chunking with overlap
+* Structure-aware text chunking using LangChain's RecursiveCharacterTextSplitter
 * 3072-dimensional Google Gemini dense embeddings
 * BM25 sparse embeddings using FastEmbed
 * Hybrid dense + sparse retrieval
