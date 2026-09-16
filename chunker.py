@@ -1,12 +1,20 @@
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+text_splitter = RecursiveCharacterTextSplitter(
+    chunk_size=600,
+    chunk_overlap=0,
+    separators=[
+        "\n\n",
+        "\n• ",
+        "\n◦ ",
+        "\n",
+        ". ",
+        " ",
+        ""
+    ]
+)
 def chunk_text(raw_text: str) -> list[str]:
-    chunks = []
-    chunk_size = 500
-    overlap = 100
-    start = 0
-    while start < len(raw_text):
-        raw_chunk = raw_text[start:start + chunk_size]
-        chunks.append(raw_chunk)
-        start+= chunk_size - overlap
+    clean_text = raw_text.replace("\r\n", "\n").replace("\r", "\n")
+    chunks = text_splitter.split_text(clean_text)
     return chunks
 
 
